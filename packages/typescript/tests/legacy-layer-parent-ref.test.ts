@@ -19,8 +19,8 @@ import { Archive } from '../src/legacy';
  * "implausible definition count" (or, after re-basing, "class-ref to non-class
  * slot"). It took nothing but an active layer that is not the last layer
  * record - Layer0 usually is not - and as many definitions as some layer's
- * slot number: a model with one tag and 10 component definitions written by
- * this package's own writer did not read back.
+ * slot number: a model with one tag and 10 groups (or component definitions),
+ * written by this package's own writer, did not read back.
  *
  * Only the usual layout puts a definition record six bytes on; that is what
  * the walker reads next whenever the count is not 0 (and a count of 0 never
@@ -102,49 +102,78 @@ describe('Archive.skipClayerParentRef', () => {
   });
 });
 
-/** Writes `tags` tags and `definitions` component definitions (one triangle
- * each, one instance each, spread over the tags), then reads the file back. */
-function writeAndRead(tags: number, definitions: number) {
+type Kind = 'components' | 'groups';
+
+/** Writes `tags` tags and `definitions` component definitions or groups (one
+ * triangle each; each component placed once), spread over the tags - or, with
+ * `onTag`, all on that one tag - then reads the file back. */
+function writeAndRead(kind: Kind, tags: number, definitions: number, onTag?: number) {
   const builder = create();
   const layers = Array.from({ length: tags }, (_, i) => builder.addLayer(`Tag ${i + 1}`));
-  const defs = Array.from({ length: definitions }, (_, i) =>
-    builder.addComponentDefinition(`Part ${i + 1}`, (def) => {
-      def.addFace([[0, 0, 0], [10, 0, 0], [0, 10, 0]]);
-    })
-  );
-  defs.forEach((def, i) => {
-    builder.addInstance(def, { name: `Part ${i + 1}`, translation: [20 * i, 0, 0], layer: layers[i % tags] });
-  });
+  const layerOf = (i: number) => layers[onTag ?? i % tags];
+  const triangle = (def: { addFace(points: [number, number, number][]): void }) => {
+    def.addFace([[0, 0, 0], [10, 0, 0], [0, 10, 0]]);
+  };
+  if (kind === 'groups') {
+    for (let i = 0; i < definitions; i++) builder.addGroup(triangle, { name: `Part ${i + 1}`, layer: layerOf(i) });
+  } else {
+    const defs = Array.from({ length: definitions }, (_, i) => builder.addComponentDefinition(`Part ${i + 1}`, triangle));
+    defs.forEach((def, i) => {
+      builder.addInstance(def, { name: `Part ${i + 1}`, translation: [20 * i, 0, 0], layer: layerOf(i) });
+    });
+  }
   const bytes = builder.toBytes();
   return parseSkp(bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer);
 }
 
+/** What `writeAndRead` gave back, or the error it threw, as one line. */
+function summary(kind: Kind, tags: number, definitions: number, onTag?: number): string {
+  try {
+    const model = writeAndRead(kind, tags, definitions, onTag);
+    return `${model.definitions.size} definitions, ${model.layers.length} layers, ${model.root.instances.length} instances`;
+  } catch (e) {
+    return String((e as Error).message).slice(0, 80);
+  }
+}
+
 describe('writer round trip: definition counts that equal a layer slot', () => {
   it('reads back one tag and 10 component definitions', () => {
-    const model = writeAndRead(1, 10);
+    const model = writeAndRead('components', 1, 10);
     expect(model.version).toBe('{17.0.1}');
     expect(model.definitions.size).toBe(10);
     expect(model.layers.map((l) => l.name)).toEqual(['Layer0', 'Tag 1']);
     expect(model.root.instances.length).toBe(10);
   });
 
-  it('reads back every model with 1-8 tags and 1-24 component definitions', () => {
+  it('reads back 10 and 11 groups on one tag', () => {
+    for (const groups of [10, 11]) {
+      const model = writeAndRead('groups', 1, groups);
+      expect(model.definitions.size, `${groups} groups`).toBe(groups);
+      expect([...model.definitions.values()].every((d) => d.isGroup), `${groups} groups`).toBe(true);
+      expect(model.root.instances.length, `${groups} groups`).toBe(groups);
+      expect(new Set(model.root.instances.map((i) => i.layer)), `${groups} groups`).toEqual(new Set(['Tag 1']));
+    }
+  });
+
+  it('reads back 10-12 groups on the second of two tags', () => {
+    for (const groups of [10, 11, 12]) {
+      expect(summary('groups', 2, groups, 1), `${groups} groups`).toBe(`${groups} definitions, 3 layers, ${groups} instances`);
+    }
+  });
+
+  it('reads back every model with 1-8 tags and 1-24 component definitions or groups', () => {
     const failed: string[] = [];
-    for (let tags = 1; tags <= 8; tags++) {
-      for (let definitions = 1; definitions <= 24; definitions++) {
-        let got: string;
-        try {
-          const model = writeAndRead(tags, definitions);
-          got = `${model.definitions.size} definitions, ${model.layers.length} layers, ${model.root.instances.length} instances`;
-        } catch (e) {
-          got = String((e as Error).message).slice(0, 80);
+    for (const kind of ['components', 'groups'] as const) {
+      for (let tags = 1; tags <= 8; tags++) {
+        for (let definitions = 1; definitions <= 24; definitions++) {
+          const got = summary(kind, tags, definitions);
+          const want = `${definitions} definitions, ${tags + 1} layers, ${definitions} instances`;
+          if (got !== want) failed.push(`${tags} tags, ${definitions} ${kind}: ${got}`);
         }
-        const want = `${definitions} definitions, ${tags + 1} layers, ${definitions} instances`;
-        if (got !== want) failed.push(`${tags} tags, ${definitions} definitions: ${got}`);
       }
     }
     expect(failed).toEqual([]);
-  });
+  }, 30000);
 });
 
 /**
