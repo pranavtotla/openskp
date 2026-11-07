@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.5.0-fork.1] — TypeScript, this copy
+
+### Fixed — TypeScript: a classic file whose definition count equals a layer's slot opens
+
+- Since 1.4.0 (#373, db105c5), `Archive.skipClayerParentRef` took a definition count equal to one
+  of the file's layer slots for a v18 parent ref, the extra layer ref some SketchUp 2018 files
+  write ahead of the active layer's. It then skipped the active layer's ref and read the count two
+  bytes late.
+- Such files were refused with "implausible definition count" or "class-ref to non-class slot 9
+  (CLayer)": this package's own writer output with one tag and 10 or 11 groups or component
+  definitions when the model has no materials, or 13 or 14 when it has two, and a SketchUp 2017
+  model with 8 layers and 16 definitions.
+- The reader now checks whether a definition record follows the count before skipping, and leaves
+  the ref alone when one does: only the usual `<active layer><count>` layout has one there.
+
 ## [1.5.0] — 2026-11-03 — all 5 languages
 
 > What most readers will notice, from the entries below (everything since 1.4.0):

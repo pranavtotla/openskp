@@ -492,6 +492,11 @@ export class Archive {
     if (ea === undefined || eb === undefined) return;
     if (ea[0] === 'class' || eb[0] === 'class') return;
     if (ea[1] !== 'CLayer' || eb[1] !== 'CLayer') return;
+    // In the usual layout b is the low half of the definition count, and a
+    // count can equal some layer's slot (16 definitions, a tag in slot 16).
+    // Only that layout has a definition record right behind the count; the
+    // v18 one has the count's high half there.
+    if (definitionStartsAt(this, this.data, this.r.pos + 6)) return;
     this.r.pos += 2;
   }
 
