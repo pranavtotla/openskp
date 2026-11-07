@@ -19,6 +19,9 @@ bridge, not a new line of development.
 - `packages/typescript/LICENSE`, a copy of the root licence, so the package carries it: npm packs
   a licence only from the package's own folder.
 - A note at the top of `packages/typescript/README.md`, and this file.
+- No release or Pages workflows: upstream's `release-*.yml` (one per port) and `deploy-pages.yml`
+  are deleted, so nothing publishes a package, creates a GitHub release or deploys a site from
+  this copy. The `ci-*.yml` workflows stay.
 - `packages/typescript/tests/fork.test.ts`, which fails if a merge undoes any of the above.
 - The fixes, each with its tests.
 
@@ -43,6 +46,8 @@ bridge, not a new line of development.
      `npm version <X.Y.Z>-fork.1 --no-git-tag-version` updates both `package.json` and
      `package-lock.json`.
    - Keep `repository`, `bugs` and `homepage` pointing here, and keep the README note.
+   - Keep the release and Pages workflows deleted: resolve a modify/delete conflict on one with
+     `git rm`, and delete any new `release-*.yml`.
    - Where upstream now fixes something this copy fixed too, take upstream's fix and drop ours.
 3. In `packages/typescript`, run `npm ci`, then `npm run typecheck`, `npm run lint`, `npm test`
    and `npm run build`.

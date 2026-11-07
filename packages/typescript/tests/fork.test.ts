@@ -57,3 +57,40 @@ describe('licence and README of this copy', () => {
     expect(note).toContain(COPY);
   });
 });
+
+/**
+ * Nothing may publish a package, create a GitHub release or deploy a site
+ * from this copy, so upstream's release-*.yml and deploy-pages.yml are
+ * deleted here. This is a tripwire over each workflow's text: a merge from
+ * upstream that brings one back, or adds a new one, fails it. CI's path
+ * filter runs this file only when packages/typescript changes, so run
+ * `npm test` after every merge from upstream as well.
+ */
+describe('workflows of this copy', () => {
+  const WORKFLOWS = path.join(REPO_ROOT, '.github', 'workflows');
+  const workflows = fs
+    .readdirSync(WORKFLOWS)
+    .filter((f) => /\.ya?ml$/.test(f))
+    .sort();
+  const PUBLISHING = [
+    /^\s*tags:/m, // release workflows run when a tag is pushed
+    /npm publish/,
+    /pypi-publish|twine upload/,
+    /nuget push/,
+    /pub publish/,
+    /action-gh-release/,
+    /deploy-pages|upload-pages-artifact/,
+  ];
+
+  it('has no release or Pages workflow', () => {
+    expect(workflows.length).toBeGreaterThan(0);
+    expect(workflows.filter((f) => /^(release-|deploy-)/.test(f))).toEqual([]);
+  });
+
+  it.each(workflows)('%s neither publishes nor deploys', (file) => {
+    const text = read(WORKFLOWS, file);
+    for (const pattern of PUBLISHING) {
+      expect(text, `${file} matches ${pattern}`).not.toMatch(pattern);
+    }
+  });
+});
