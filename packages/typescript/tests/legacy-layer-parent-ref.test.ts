@@ -146,3 +146,42 @@ describe('writer round trip: definition counts that equal a layer slot', () => {
     expect(failed).toEqual([]);
   });
 });
+
+/**
+ * The same collision in a model with two materials. They come first in the
+ * file, so Layer0 and the tag take slots 13 and 14. With two materials the
+ * reader takes its slot base from them and walks that base only, so the
+ * count read two bytes late is reported as it is: "implausible definition
+ * count", the error a SketchUp 2017 model with this collision gave.
+ */
+function writeAndReadTwoMaterials(definitions: number) {
+  const builder = create();
+  const red = builder.addMaterial('Red', [200, 30, 30, 255]);
+  builder.addMaterial('Blue', [30, 30, 200, 255]);
+  const tag = builder.addLayer('Tag 1');
+  const defs = Array.from({ length: definitions }, (_, i) =>
+    builder.addComponentDefinition(`Part ${i + 1}`, (def) => {
+      def.addFace([[0, 0, 0], [10, 0, 0], [0, 10, 0]], { material: red });
+    })
+  );
+  defs.forEach((def, i) => {
+    builder.addInstance(def, { name: `Part ${i + 1}`, translation: [20 * i, 0, 0], layer: tag });
+  });
+  const bytes = builder.toBytes();
+  return parseSkp(bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer);
+}
+
+describe('writer round trip: two materials and a definition count that equals a layer slot', () => {
+  it.each([13, 14])('reads back two materials, one tag and %i component definitions', (definitions) => {
+    let got: string;
+    try {
+      const model = writeAndReadTwoMaterials(definitions);
+      got =
+        `${model.definitions.size} definitions, ${model.layers.length} layers, ` +
+        `${model.root.instances.length} instances, ${model.materials.length} materials`;
+    } catch (e) {
+      got = String((e as Error).message).slice(0, 80);
+    }
+    expect(got).toBe(`${definitions} definitions, 2 layers, ${definitions} instances, 2 materials`);
+  });
+});
