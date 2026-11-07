@@ -1,3 +1,10 @@
+> **This is a copy of openskp**, from
+> [github.com/pranavtotla/openskp](https://github.com/pranavtotla/openskp/tree/fork), branch
+> `fork`. It is based on upstream's `typescript-v1.5.0` release and carries fixes for files
+> upstream doesn't read yet; prefer [upstream openskp](https://github.com/iamahsanmehmood/openskp)
+> once it reads them. [FORK.md](https://github.com/pranavtotla/openskp/blob/fork/FORK.md)
+> says how this copy is kept. The rest of this README is upstream's.
+
 # OpenSKP
 
 **The open-source SketchUp (`.skp`) file parser, writer, and converter — TypeScript / JavaScript edition.**
