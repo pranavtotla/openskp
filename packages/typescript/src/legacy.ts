@@ -617,6 +617,12 @@ const FIRST_DIB_OBJECT = 6;
  * and 4 files have none; where the name is optional the reader checks for one). */
 const FIRST_NAMED_INSTANCE = 5;
 
+/** First version (SketchUp 2014) that ends a CComponentInstance or a CGroup
+ * with a 16-byte GUID. Gated by the file's own version, not by the class's
+ * reported schema (openskp#284 / #310). A CImage, laid out like an instance,
+ * is taken to start its GUID at the same version (see readImage). */
+const FIRST_INSTANCE_GUID = 14;
+
 /** `preamble` for the entity types that carry NO attribute-container
  * pointer in a SketchUp 3 file: vertex, loop, edge-use, material, layer.
  * (Edge, face, definition, instance and thumbnail still open with one.) */
@@ -1118,10 +1124,20 @@ function readThumbnail(ar: Archive, r: R): any {
 /** CImage: an Image entity - instance-shaped: a back-ref to the (already
  * walked) CComponentDefinition holding the image's face and texture, a 3x4
  * placement, a constant 1.0, the source path string (empty in every
- * sample), and a 16-byte GUID. It appears as a normal entity-list item
- * inside the definition that owns the image (typically a face-me/photo
- * definition), whose own tail the ordinary definition reader then
- * consumes. */
+ * sample), and - like an instance, in newer files (see below) - a 16-byte
+ * GUID. It appears as a normal entity-list item inside the definition that
+ * owns the image (typically a face-me/photo definition), whose own tail the
+ * ordinary definition reader then consumes.
+ *
+ * The record is byte for byte a CComponentInstance's (the 1.0 is the
+ * transform's scale term, the source path sits where an instance keeps its
+ * name), so its GUID is taken to start at version 14, as for instances
+ * (readInstance's gate, #310). That boundary is inferred, not observed: the
+ * only real image records seen are from version 8 files (no GUID) and from
+ * SketchUp 2017 and 2018 files (GUID).
+ * Read from a SketchUp 8 file, the 16 bytes were the start of the next
+ * record, and the walk failed later with an unrelated-looking
+ * "class-ref to non-class slot". */
 function readImage(ar: Archive, r: R): any {
   preamble(ar, r);
   const db = drawbase(ar, r);
@@ -1129,7 +1145,7 @@ function readImage(ar: Archive, r: R): any {
   const xform = r.f64s(12);
   r.f64(); // constant 1.0
   r.utf16(); // source path
-  const guid = r.raw(16);
+  const guid = ar.ver >= FIRST_INSTANCE_GUID ? r.raw(16) : new Uint8Array(0);
   return { k: 'image', db, def: ds, xform, guid: toHex(guid) };
 }
 
@@ -1676,7 +1692,7 @@ function readInstance(ar: Archive, r: R): any {
   // file's CComponentInstance reports schema 6, and CGroup reports schema 1
   // on every version, so a schema gate is always true for it and forces a
   // phantom 16-byte read on every pre-2014 group (openskp#284 / #310).
-  const guid = ar.ver >= 14 ? r.raw(16) : new Uint8Array(0);
+  const guid = ar.ver >= FIRST_INSTANCE_GUID ? r.raw(16) : new Uint8Array(0);
 
   return { k: 'instance', db, def: ds, xf, name, guid: toHex(guid), attrs: pre.attrs };
 }

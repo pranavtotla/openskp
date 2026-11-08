@@ -22,6 +22,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The reader now checks whether a definition record follows the count before skipping, and leaves
   the ref alone when one does: only the usual `<active layer><count>` layout has one there.
 
+### Fixed — TypeScript: a pre-2014 file with an Image entity opens
+
+- A `CImage` record is laid out exactly like a `CComponentInstance` (its constant 1.0 is the
+  transform's scale term, its source path sits where an instance keeps its name). An instance
+  ends with a 16-byte GUID only from SketchUp 2014 (file version 14) on, the gate #310 put on
+  instances, and an image's GUID is taken to start at version 14 too: the real image records
+  seen so far are from version 8 (no GUID) and versions 17 and 18 (GUID).
+- The image reader was calibrated on SketchUp 2017 and 2018 files and read the GUID at every
+  version, so in an older file it swallowed the first 16 bytes of the next record. A real
+  SketchUp 8 house model (`Models/House.skp` of github.com/fillet54/ManganoHouse), whose image
+  definition is placed by two images in a row, failed with `class-ref to non-class slot 16368
+  (CVertex)`; in a root entity list the same over-read would have ended the list early without
+  an error.
+- That model now reads with 210 definitions, 25,787 faces, 335 instances (3 of them images), 15
+  layers and 62 materials, and a SketchUp 2017 file's image still reads its GUID.
+- The Python, .NET, Dart and C++ image readers still read the GUID at every version.
+
 ## [1.5.0] — 2026-11-03 — all 5 languages
 
 > What most readers will notice, from the entries below (everything since 1.4.0):
